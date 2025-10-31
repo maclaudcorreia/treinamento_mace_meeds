@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tabela Operacional</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* UI geral */
+    ::-webkit-scrollbar{height:8px;width:8px}
+    ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:8px}
+    thead th{position:sticky;top:0;background:#f3f4f6;z-index:2;box-shadow:0 1px 0 #e5e7eb}
+
+    /* Chips de responsáveis (multi-select visual) */
+    .tag{
+      display:inline-flex;align-items:center;gap:.35rem;
+      padding:.22rem .55rem;border-radius:12px;
+      font-size:.72rem;font-weight:700;line-height:1;
+      background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe
+    }
+    .tag button{
+      border:0;background:transparent;cursor:pointer;
+      font-weight:800;line-height:1;color:#1e40af
+    }
+    .tag button:hover{color:#0b3ea8}
+    .select-mini{padding:.25rem .5rem;border:1px solid #e5e7eb;border-radius:.5rem;background:#fff}
+
+    /* Datas coloridas */
+    input.date-inicio{background:#fee2e2;border-color:#ef4444}
+    input.date-inicio:focus{outline:0;box-shadow:0 0 0 2px #fecaca}
+    input.date-fim{background:#dcfce7;border-color:#22c55e}
+    input.date-fim:focus{outline:0;box-shadow:0 0 0 2px #bbf7d0}
+
+    /* Estilo dos campos de Treinamento */
+    input.treinamento {
+      transition: background 0.2s, border 0.2s;
+    }
+
+    input.treinamento.pendente {
+      background-color: #fef9c3;  /* amarelo claro */
+      border-color: #facc15;      /* borda amarela */
+    }
+
+    input.treinamento.ok {
+      background-color: #dcfce7;  /* verde claro */
+      border-color: #22c55e;      /* borda verde */
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+<body style="background-color: #ADD8E6;"> <!-- Azul claro -->
+  <!-- Conteúdo da página -->
+</body>
+  <header class="px-6 py-4 border-b bg-white text-center">
+    <!-- Título centralizado, com a imagem se desejado -->
+    <h1 class="text-2xl font-bold inline-flex items-center justify-center">
+      <img src="logo%20callmed%201.PNG" alt="Ícone" class="mr-2 w-100 h-20">Tabela Treinamentos
+    </h1>
+  </header>
+
+  <main class="max-w-7xl mx-auto mt-6">
+    <div class="flex flex-wrap gap-2 mb-3">
+      <button id="addRow" class="px-3 py-1 border rounded-lg hover:bg-gray-100">Nova linha</button>
+      <button id="exp" class="px-3 py-1 border rounded-lg hover:bg-gray-100">Exportar CSV</button>
+      <label class="px-3 py-1 border rounded-lg hover:bg-gray-100 cursor-pointer">Importar CSV
+        <input id="imp" type="file" accept=".csv" hidden>
+      </label>
+      <button id="clr" class="px-3 py-1 border rounded-lg text-red-600 hover:bg-red-50">Zerar (local)</button>
+    </div>
+
+    <div class="overflow-x-auto bg-white rounded-2xl shadow">
+      <table class="min-w-full border-collapse text-sm">
+        <thead>
+          <tr id="thead" class="bg-gray-100"></tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <p class="text-xs text-gray-500 mt-2 px-1">
+      Dica: os campos de texto são editáveis, “Responsáveis” tem chips (), e as datas têm cores por tipo.
+      Tudo é salvo automaticamente no seu navegador.
+    </p>
+  </main>
+
+  <script>
+    /* ===== Estado & configuração ===== */
+    const STORAGE='tabela_operacional_v3';
+
+    let columns = [
+      {key:'unidade',   label:'Unidade',  type:'text',   width:150},
+      {key:'tipo',      label:'Tipo de Unidade', type:'select', width:90, options:'UBS,UPA,Hospital'},
+      /* Datas com cor */
+      {key:'dtinicio',  label:'Data Início',     type:'date',   width:120},
+      {key:'dtfim',     label:'Data Fim',        type:'date',   width:120},
+      /* Treinamento com cor */
+      {key:'treinamento',  label:'Treinamento',     type:'select', width:40, options: 'Ok, Pendente'},
+      /* Multi-select visual */
+      {key:'resp',      label:'Responsáveis',    type:'select', width:100, options:'Alan,Marcelo,Maclaud,Aline, Rachel, Callmed'},
+      {key:'resp',      label:'Acompanhamento',  type:'select', width:100, options:'Alan,Marcelo,Maclaud,Aline, Rachel, Callmed'},
+      {key:'acompanhamento',  label:'Acompanhamento',     type:'select', width:10, options: 'Realizado, Não Realizado'},
+      /* Coluna de ações (excluir) */
+      {key:'acoes',     label:'Ações',           type:'actions',width:80}
+    ];
+
+    let rows = JSON.parse(localStorage.getItem(STORAGE) || '[]');
+    if(!rows.length){
+      rows = [
+        {entrega:'1', unidade:'USF Bosque Azul', tipo:'UBS', espaco:'Sim', cond:'Pronta', drywall:'OK', dtinicio:'2025-10-01', dtfim:'2025-10-07', ambiente:'Consultório', plotagem:'Planejada', resp:'Alan, Marcelo', obs:'Ajustar rede'},
+        {entrega:'2', unidade:'Clínica do Idoso', tipo:'Policlínica', espaco:'Sim', cond:'Pronta', drywall:'OK', dtinicio:'2025-10-08', dtfim:'2025-10-10', ambiente:'Consultório', plotagem:'Aguardando', resp:'Marcelo', obs:'Plotagem porta pendente'},
+        {entrega:'3', unidade:'UBS Moacyr Santos', tipo:'UBS', espaco:'Não', cond:'Em reforma', drywall:'Em andamento', dtinicio:'', dtfim:'', ambiente:'Cabine', plotagem:'Planejada', resp:'Maclaud', obs:'Aguardar liberação da sala'}
+      ];
+      persist();
+    }
+
+    function persist(){ localStorage.setItem(STORAGE, JSON.stringify(rows)); }
+    function tdBase(w){ const td=document.createElement('td'); td.className='border-t'; td.style.minWidth=w+'px'; return td; }
+
+    /* ===== Cabeçalho ===== */
+    function renderHead(){
+      const tr=document.getElementById('thead'); tr.innerHTML='';
+      columns.forEach(c=>{
+        const th=document.createElement('th');
+        th.textContent=c.label;
+        th.className='p-2 text-left font-semibold text-center'; // Adiciona a classe text-center aqui
+        th.style.minWidth = (c.width||140)+'px';
+        tr.appendChild(th);
+      });
+    }
+
+    /* ===== Responsáveis (chips) ===== */
+    function renderRespCell(td,col,row){
+      const wrap=document.createElement('div');
+      wrap.className='flex items-center gap-2 flex-wrap';
+
+      const chips=document.createElement('div');
+      chips.className='flex flex-wrap gap-1';
+
+      const sel=document.createElement('select');
+      sel.className='select-mini';
+      const opts=(col.options||'').split(',').map(s=>s.trim()).filter(Boolean);
+      sel.innerHTML = '<option value="">+</option>' + opts.map(o=>`<option value="${o}">${o}</option>`).join('');
+
+      function sync(){
+        chips.innerHTML='';
+        const vals=(row[col.key]||'').split(',').map(v=>v.trim()).filter(Boolean);
+        vals.forEach(v=>{
+          const tag=document.createElement('span');
+          tag.className='tag';
+          tag.innerHTML=`${v} <button title="remover">×</button>`;
+          tag.querySelector('button').onclick=()=>{
+            const next = vals.filter(x=>x!==v);
+            row[col.key] = next.join(', ');
+            persist(); sync();
+          };
+          chips.appendChild(tag);
+        });
+      }
+
+      sel.onchange=()=>{
+        const val=sel.value;
+        if(!val) return;
+        const vals=(row[col.key]||'').split(',').map(v=>v.trim()).filter(Boolean);
+        if(!vals.includes(val)){
+          vals.push(val);
+          row[col.key] = vals.join(', ');
+          persist(); sync();
+        }
+        sel.value=''; // volta para "+ adicionar"
+      };
+
+      wrap.append(chips, sel);
+      td.appendChild(wrap);
+      sync();
+    }
+
+    /* ===== Linhas ===== */
+    function renderRows(){
+      const tb=document.getElementById('tbody'); tb.innerHTML='';
+
+      rows.forEach((row,i)=>{
+        const tr=document.createElement('tr');
+        tr.className='hover:bg-gray-50';
+
+        columns.forEach(col=>{
+          const td=tdBase(col.width);
+          td.classList.add('text-center'); // Adiciona a classe text-center aqui
+
+          if(col.type==='text'){
+            const inp=document.createElement('input');
+            inp.className='px-2 py-1 border rounded-lg w-full';
+            inp.value=row[col.key]||'';
+            inp.oninput=()=>{ row[col.key]=inp.value; persist(); };
+            td.appendChild(inp);
+          }
+
+          else if(col.type==='date'){
+            const inp=document.createElement('input');
+            inp.type='date';
+            inp.className='px-2 py-1 border rounded-lg w-full';
+            if(col.key==='dtinicio') inp.classList.add('date-inicio');
+            if(col.key==='dtfim')    inp.classList.add('date-fim');
+            inp.value=row[col.key]||'';
+            inp.oninput=()=>{ row[col.key]=inp.value; persist(); };
+            td.appendChild(inp);
+          }
+
+          else if(col.type==='select'){
+            if(col.key==='resp'){ // multi-select visual
+              renderRespCell(td,col,row);
+            } else {
+              const sel=document.createElement('select');
+              sel.className='px-2 py-1 border rounded-lg bg-white w-full';
+              (col.options||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(o=>{
+                const op=document.createElement('option'); op.value=o; op.textContent=o; sel.appendChild(op);
+              });
+              sel.value=row[col.key]||'';
+              sel.onchange=()=>{ row[col.key]=sel.value; persist(); };
+              td.appendChild(sel);
+            }
+          }
+
+          else if(col.type==='actions'){
+            const btn=document.createElement('button');
+            btn.innerHTML='🗑️';
+            btn.title='Excluir linha';
+            btn.className='px-2 py-1 rounded-lg border hover:bg-red-50 hover:text-red-600';
+            btn.onclick=()=>{
+              if(confirm('Tem certeza que deseja excluir esta linha?')){
+                rows.splice(i,1); persist(); renderRows();
+              }
+            };
+            td.appendChild(btn);
+          }
+
+          tr.appendChild(td);
+        });
+
+        tb.appendChild(tr);
+      });
+    }
+
+    /* ===== Toolbar ===== */
+    document.getElementById('addRow').onclick=()=>{ rows.push({}); persist(); renderRows(); };
+    document.getElementById('clr').onclick=()=>{ if(confirm('Apagar tudo?')){ rows=[]; persist(); renderRows(); } };
+    document.getElementById('exp').onclick=()=>{
+      const header = columns.map(c=>c.key).join(',');
+      const lines = rows.map(r=> columns.map(c=> JSON.stringify(r[c.key]||'')).join(','));
+      const blob = new Blob([[header, ...lines].join('\n')], {type:'text/csv;charset=utf-8;'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='tabela_operacional.csv'; a.click();
+    };
+    document.getElementById('imp').onchange=e=>{
+      const f=e.target.files?.[0]; if(!f) return;
+      const r=new FileReader();
+      r.onload=()=>{
+        const text=r.result?.toString()||'';
+        const lines=text.split(/\r?\n/).filter(Boolean);
+        const keys=lines.shift().split(',').map(s=>s.replace(/^"|"$/g,''));
+        rows = lines.map(line=>{
+          const parts=line.match(/(?:^|,)("(?:[^"]|"")*"|[^,]*)/g)?.map(s=>s.replace(/^,?"|"$/g,'').replace(/""/g,'"'))||[];
+          const obj={};
+          columns.forEach((c,j)=>{ const idx = keys.indexOf(c.key); obj[c.key] = idx>=0? parts[idx]||'' : '' });
+          return obj;
+        });
+        persist(); renderRows(); e.target.value='';
+      };
+      r.readAsText(f);
+    };
+
+    /* ===== Start ===== */
+    renderHead(); renderRows();
+  </script>
+</body>
+</html>
